@@ -15,7 +15,7 @@ global {
 	//geometry shape <- envelope(shape_file_bounds);
 	geometry shape <- envelope(osmfile);
 	float step <- 10 #s;
-	date starting_date <- date("2019-09-01-00-00-00");	
+	date starting_date <- date("2025-04-10-05-00-00");	
 	int nb_people <- 10000;
 	int min_work_start <- 5;
 	int max_work_start <- 9;
@@ -26,6 +26,7 @@ global {
 	float destroy <- 0.02;
 	int repair_time <- 2 ;
 	graph the_graph;
+	float total_road_length <- 50000;
 	
 	init { 
 		//possibility to load all of the attibutes of the OSM data: for an exhaustive list, see: http://wiki.openstreetmap.org/wiki/Map_Features
@@ -70,8 +71,7 @@ global {
 					}					
 				}
 			}
-			//total_road_length <- sum(road collect each.road_length);
-			total_road_length <- 100;
+			total_road_length <- sum(road collect each.road_length);
 			//do the generic agent die
 			do die;
 		}
@@ -170,7 +170,7 @@ species osm_agent
 {
 	string highway_str;
 	string building_str;
-	float total_road_length;
+	//float total_road_length;
 }
 
 species node_agent
@@ -202,21 +202,25 @@ experiment road_traffic type: gui {
 			species people aspect: base ;
 		}
 		display chart_display refresh: every(10#cycles)  type: 2d { 
-			chart "Indicators" type: series size: {1, 1} position: {0, 0} {
+			chart "Raw" type: series size: {1, 0.5} position: {0, 0} {
 				//data "Mean road destruction" value: mean (road collect each.destruction_coeff) style: line color: #green ;
 				//data "Max road destruction" value: road max_of each.destruction_coeff style: line color: #red ;
 				//data "Agents moving" value: people count (each.the_target != nil) color: #black ;
 				//data "Road length" value: sum(road collect each.road_length) color: #green ;
 				//data "Road occupancy" value: div(sum(road collect each.road_length), people count(each.the_target != nil)) color: #green ;
 				//data "Road occupancy" value: div(mul(2 #m, sum(1, people count(each.the_target != nil))),sum(road collect each.road_length)) color: #green ;
-				data "Road occupancy" value: mul(5, sum(people count(each.the_target != nil))) color: #green ;
+				data "Vehicles occupancy" value: mul(5, sum(people count(each.the_target != nil))) color: #red ;
+				data "Road length" value: total_road_length color: #green ;
 				
 				// count (each.road_length > 0) color: #green ;
 			}
-			//chart "People Objectif" type: pie style: exploded size: {1, 0.5} position: {0, 0.5}{
+			chart "Indicators" type: series size: {1, 0.5} position: {0, 0.5}{
 			//	data "Working" value: people count (each.objective="working") color: #magenta ;
 			//	data "Resting" value: people count (each.objective="resting") color: #blue ;
-			//}
+				data "Traffic %" value: float(div(mul(500.0, sum(people count(each.the_target != nil))),float(total_road_length))) color: #black ;
+
+			}
+
 		}
 	}
 }
