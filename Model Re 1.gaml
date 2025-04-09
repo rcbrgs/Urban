@@ -14,7 +14,7 @@ global {
 	file<geometry> osmfile;
 	//geometry shape <- envelope(shape_file_bounds);
 	geometry shape <- envelope(osmfile);
-	float step <- 10 #s;
+	float step <- 1 #mn;
 	date starting_date <- date("2025-04-10-05-00-00");	
 	int nb_people <- 10000;
 	int min_work_start <- 5;
