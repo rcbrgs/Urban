@@ -2,7 +2,6 @@ import csv
 
 class Leitor2010 (object):
     def __init__(self):
-        #self.nomeArquivo = "/home/re/lentidaotrechos2010.csv"
         self.nomeArquivo = "/home/re/lentidaotrechos2010AvMercurio.csv"
         self.leitor = None
         self.dados = { }
@@ -21,15 +20,25 @@ class Leitor2010 (object):
         else:
             self.dados[linha[0]] = float(linha[5])
 
-    def relatar(self, data):
+    def relatar(self, ano, mes, dia, hora, minuto):
+        data = "{}/{}/{} {}:{}".format(dia, mes, ano, hora, minuto)
         if data not in self.dados.keys():
-            print("Dado inexistente.")
+            #print("Dado inexistente.")
             return
-        print(self.dados[data])
+        print("20{}-{:0>2}-{:0>2} {:0>2}:{}:00; {}".format(ano, mes,dia, hora, minuto, self.dados[data]))
+
+    def relatar2010(self):
+        for mes in range(1,12):
+            for dia in range(1,31):
+                for hora in range(0,23):
+                    #self.relatar("{}/{}/10".format(dia, mes), "{}:00".format(hora))
+                    #self.relatar("{}/{}/10".format(dia, mes), "{}:30".format(hora))
+                    self.relatar(10, mes, dia, hora, 0)
+                    self.relatar(10, mes, dia, hora, 30)
                 
 if __name__ == '__main__':
     leitor2010 = Leitor2010()
     leitor2010.carregarDoDisco()
-    print("Digite a data a consultar, no formato DD/MM/AA HH:MM.")
-    data = input()
-    leitor2010.relatar(data)
+    #print("Digite a data a consultar, no formato DD/MM/AA HH:MM.")
+    #data = input()
+    leitor2010.relatar2010()

@@ -1,3 +1,4 @@
+*.csv
 *~
 # Compiled class file
 *.class
