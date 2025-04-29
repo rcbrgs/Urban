@@ -1,22 +1,11 @@
-/**
-* Name: Automatic repair of roads
-* Author:
-* Description: 7th part of the tutorial: Road Traffic
-* Tags: transport
-*/
-
 model tutorial_gis_city_traffic
 
 global {
-	//file shape_file_buildings <- file("../includes/building.shp");
-	//file shape_file_roads <- file("../includes/road.shp");
-	//file shape_file_bounds <- file("../includes/bounds.shp");
 	file<geometry> osmfile;
-	//geometry shape <- envelope(shape_file_bounds);
 	geometry shape <- envelope(osmfile);
 	float step <- 1 #mn;
-	date starting_date <- date("2010-01-04") add_hours 4;
-	date ending_date <- date("2010-01-04") add_hours 22;
+	date starting_date <- date("2009-12-31") add_hours 4;
+	date ending_date <- date("2010-02-01") add_hours 23;
 	int nb_people <- 20000;
 	int min_work_start <- 5;
 	int max_work_start <- 9;
@@ -29,7 +18,8 @@ global {
 	graph the_graph;
 	float total_road_length <- 50000;
 	
-	init { 
+	init {
+		create reportAgent;
 		//possibility to load all of the attibutes of the OSM data: for an exhaustive list, see: http://wiki.openstreetmap.org/wiki/Map_Features
 		create osm_agent from: osmfile with: [highway_str::string(read("highway")), building_str::string(read("building")), osmId::string(read("name"))];
 
@@ -44,9 +34,9 @@ global {
 				if (highway_str != nil)
 				{
 					if osmId = "Avenida Mercúrio" {
-					   create road with: [shape::shape, type:: highway_str, color:: #black, name:: "Avenida Mercúrio"];
+					   create road with: [shape::shape, type:: highway_str, color:: #black, name:: "Avenida Mercúrio", parentOSMAgent:: osm_agent];
 					   } else {
-					   create road with: [shape::shape, type:: highway_str];
+					   create road with: [shape::shape, type:: highway_str, parentOSMAgent:: osm_agent];
 					   }
 				} else if (building_str != nil)
 				{	
@@ -110,10 +100,12 @@ global {
 
 	reflex updateCSV {
 	       if (current_date.minute = 30) {
-	       	  write string(current_date) + "; " + string(sum(people count(each.the_target != nil)));
+		  ask reportAgent { write string(current_date) + "; " + string(sum(people count(each.the_target != nil))) + "; " + agentsAvMercurio; }
+		  ask reportAgent { do resetAvMercurio; }
 		  }
 	       if (current_date.minute = 0) {
-	       	  write string(current_date) + "; " + string(sum(people count(each.the_target != nil)));
+		  ask reportAgent { write string(current_date) + "; " + string(sum(people count(each.the_target != nil))) + "; " + agentsAvMercurio; }
+  		  ask reportAgent { do resetAvMercurio; }
 		  }
 		
 	}
@@ -124,11 +116,12 @@ global {
 		  }
 		  }
 
-	reflex printHeader {
+	reflex printHeader
+	{
 	       if current_date = starting_date {
-	       	  write total_road_length;
+	       	  write "total_road_length: " + total_road_length;
 		  }
-		  }
+	}
 
 }
 
@@ -148,6 +141,7 @@ species road  {
 	string name;
 	float road_length <- shape.perimeter;
 	int peoplePassed;
+	osm_agent parentOSMAgent;
 
 	aspect base {
 		draw shape color: color ;
@@ -165,22 +159,6 @@ species road  {
 	action addPeople(int nPeople) {
 	       peoplePassed <- peoplePassed + 1;
 	       }
-
-	reflex printMovingMercurio {
-	       if (current_date.minute = 30) {
-	       	       if name = "Avenida Mercúrio" {
-	       	       	  write "Mercurio; " + string(peoplePassed);
-		  }
-		  }
-	       if (current_date.minute = 0) {
-	           	if name = "Avenida Mercúrio" {
-	       	       	  write "Mercurio; " + string(peoplePassed);
-		  }
-
-		  }
-	
-	}
-
 }
 
 species people skills:[moving] {
@@ -212,6 +190,8 @@ species people skills:[moving] {
 				destruction_coeff <- destruction_coeff + (destroy * dist / shape.perimeter);
 				if name = "Avenida Mercúrio" {
 				   do addPeople(1);
+				   //ask parentOSMAgent { do addAgentAvMercurio; }
+				   ask reportAgent { do addAgent; }
 				   }
 			}
 		}
@@ -230,6 +210,10 @@ species osm_agent
 	string highway_str;
 	string building_str;
 	string osmId;
+	int agentsAvMercurio <- 0;
+
+	action addAgentAvMercurio {
+	       agentsAvMercurio <- agentsAvMercurio + 1; }
 }
 
 species node_agent
@@ -241,6 +225,21 @@ species node_agent
 	}
 
 }
+
+species reportAgent
+{
+	int agentsAvMercurio <- 0;
+	action addAgent
+	{
+		agentsAvMercurio <- agentsAvMercurio + 1;
+	}
+
+	action resetAvMercurio
+	{
+		agentsAvMercurio <- 0;
+	} // action resetAvMercurio
+	
+} // species reportAgent
 
 experiment road_traffic type: gui {
 	parameter "File:" var: osmfile <- file<geometry> (osm_file("/home/re/20250423_AvMercurio.osm"));
