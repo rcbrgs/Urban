@@ -1,22 +1,12 @@
-/**
-* Name: Automatic repair of roads
-* Author:
-* Description: 7th part of the tutorial: Road Traffic
-* Tags: transport
-*/
-
 model tutorial_gis_city_traffic
 
 global {
-	//file shape_file_buildings <- file("../includes/building.shp");
-	//file shape_file_roads <- file("../includes/road.shp");
-	//file shape_file_bounds <- file("../includes/bounds.shp");
 	file<geometry> osmfile;
-	//geometry shape <- envelope(shape_file_bounds);
 	geometry shape <- envelope(osmfile);
 	float step <- 1 #mn;
-	date starting_date <- date("2025-04-10-05-00-00");	
-	int nb_people <- 10000;
+	date starting_date <- date("2009-12-31") add_hours 4;
+	date ending_date <- date("2010-02-01") add_hours 23;
+	int nb_people <- 20000;
 	int min_work_start <- 5;
 	int max_work_start <- 9;
 	int min_work_end <- 16; 
@@ -28,9 +18,10 @@ global {
 	graph the_graph;
 	float total_road_length <- 50000;
 	
-	init { 
+	init {
+		create reportAgent;
 		//possibility to load all of the attibutes of the OSM data: for an exhaustive list, see: http://wiki.openstreetmap.org/wiki/Map_Features
-		create osm_agent from: osmfile with: [highway_str::string(read("highway")), building_str::string(read("building"))];
+		create osm_agent from: osmfile with: [highway_str::string(read("highway")), building_str::string(read("building")), osmId::string(read("name"))];
 
 		//from the created generic agents, creation of the selected agents
 		ask osm_agent
@@ -42,7 +33,11 @@ global {
 			{
 				if (highway_str != nil)
 				{
-					create road with: [shape::shape, type:: highway_str];
+					if osmId = "Avenida Mercúrio" {
+					   create road with: [shape::shape, type:: highway_str, color:: #black, name:: "Avenida Mercúrio", parentOSMAgent:: osm_agent];
+					   } else {
+					   create road with: [shape::shape, type:: highway_str, parentOSMAgent:: osm_agent];
+					   }
 				} else if (building_str != nil)
 				{	
 					if (building_str = "industrial") {
@@ -95,12 +90,45 @@ global {
 		map<road,float> weights_map <- road as_map (each:: (each.destruction_coeff * each.shape.perimeter));
 		the_graph <- the_graph with_weights weights_map;
 	}
+	
 	reflex repair_road when: every(repair_time #hour ) {
 		road the_road_to_repair <- road with_max_of (each.destruction_coeff) ;
 		ask the_road_to_repair {
 			destruction_coeff <- 1.0 ;
 		}
 	}
+
+	reflex updateCSV {
+	       if (current_date.minute = 30) {
+		  ask reportAgent {
+		      string outputString <- string(current_date) + "; " + string(sum(people count(each.the_target != nil))) + "; " + agentsAvMercurio;
+		      save (outputString) to: "/home/re/output.csv" format: "text" rewrite: false;
+		      		  }
+		  ask reportAgent { do resetAvMercurio; }
+		  }
+	       if (current_date.minute = 0) {
+		  ask reportAgent {
+      		      string outputString <- string(current_date) + "; " + string(sum(people count(each.the_target != nil))) + "; " + agentsAvMercurio;
+		      save (outputString) to: "/home/re/output.csv" format: "text" rewrite: false;
+		      	    	  }
+  		  ask reportAgent { do resetAvMercurio; }
+		  }
+		
+	}
+
+	reflex checkEnding {
+	       if current_date > ending_date {
+	       	  do die;
+		  }
+		  }
+
+	reflex printHeader
+	{
+	       if current_date = starting_date {
+	       	  write "total_road_length: " + total_road_length;
+		  }
+	}
+
 }
 
 species building {
@@ -116,16 +144,27 @@ species road  {
 	float destruction_coeff <- rnd(1.0,2.0) max: 2.0;
 	int colorValue <- int(255*(destruction_coeff - 1)) update: int(255*(destruction_coeff - 1));
 	rgb color <- rgb(min([255, colorValue]),max ([0, 255 - colorValue]),0)  update: rgb(min([255, colorValue]),max ([0, 255 - colorValue]),0) ;
+	string name;
 	float road_length <- shape.perimeter;
-	
+	int peoplePassed;
+	osm_agent parentOSMAgent;
+
 	aspect base {
 		draw shape color: color ;
 	}
+
+	aspect interesting {
+	       draw shape color: #red ;
+	       }
 	
 	string type;
 	aspect default {
 		draw shape color: color ;
 	}
+
+	action addPeople(int nPeople) {
+	       peoplePassed <- peoplePassed + 1;
+	       }
 }
 
 species people skills:[moving] {
@@ -136,7 +175,8 @@ species people skills:[moving] {
 	int end_work  ;
 	string objective ; 
 	point the_target <- nil ;
-		
+	string currentRoad;
+
 	reflex time_to_work when: current_date.hour = start_work and objective = "resting"{
 		objective <- "working" ;
 		the_target <- any_location_in (working_place);
@@ -154,6 +194,11 @@ species people skills:[moving] {
 			float dist <- line.perimeter;
 			ask road(path_followed agent_from_geometry line) { 
 				destruction_coeff <- destruction_coeff + (destroy * dist / shape.perimeter);
+				if name = "Avenida Mercúrio" {
+				   do addPeople(1);
+				   //ask parentOSMAgent { do addAgentAvMercurio; }
+				   ask reportAgent { do addAgent; }
+				   }
 			}
 		}
 		if the_target = location {
@@ -170,7 +215,11 @@ species osm_agent
 {
 	string highway_str;
 	string building_str;
-	//float total_road_length;
+	string osmId;
+	int agentsAvMercurio <- 0;
+
+	action addAgentAvMercurio {
+	       agentsAvMercurio <- agentsAvMercurio + 1; }
 }
 
 species node_agent
@@ -183,8 +232,23 @@ species node_agent
 
 }
 
+species reportAgent
+{
+	int agentsAvMercurio <- 0;
+	action addAgent
+	{
+		agentsAvMercurio <- agentsAvMercurio + 1;
+	}
+
+	action resetAvMercurio
+	{
+		agentsAvMercurio <- 0;
+	} // action resetAvMercurio
+	
+} // species reportAgent
+
 experiment road_traffic type: gui {
-	parameter "File:" var: osmfile <- file<geometry> (osm_file("/home/re/map_02.osm"));
+	parameter "File:" var: osmfile <- file<geometry> (osm_file("/home/re/2025/doutorado/MAC6931 Estudos Avançados em Sistemas de Software/20250423_AvMercurio.osm"));
 	parameter "Number of people agents" var: nb_people category: "People" ;
 	parameter "Earliest hour to start work" var: min_work_start category: "People" min: 2 max: 8;
 	parameter "Latest hour to start work" var: max_work_start category: "People" min: 8 max: 12;
@@ -203,24 +267,8 @@ experiment road_traffic type: gui {
 		}
 		display chart_display refresh: every(10#cycles)  type: 2d { 
 			chart "Raw" type: series size: {1, 0.5} position: {0, 0} {
-				//data "Mean road destruction" value: mean (road collect each.destruction_coeff) style: line color: #green ;
-				//data "Max road destruction" value: road max_of each.destruction_coeff style: line color: #red ;
-				//data "Agents moving" value: people count (each.the_target != nil) color: #black ;
-				//data "Road length" value: sum(road collect each.road_length) color: #green ;
-				//data "Road occupancy" value: div(sum(road collect each.road_length), people count(each.the_target != nil)) color: #green ;
-				//data "Road occupancy" value: div(mul(2 #m, sum(1, people count(each.the_target != nil))),sum(road collect each.road_length)) color: #green ;
-				data "Vehicles occupancy" value: mul(5, sum(people count(each.the_target != nil))) color: #red ;
-				data "Road length" value: total_road_length color: #green ;
-				
-				// count (each.road_length > 0) color: #green ;
+				data "Agents moving" value: sum(people count(each.the_target != nil)) color: #red ;
 			}
-			chart "Indicators" type: series size: {1, 0.5} position: {0, 0.5}{
-			//	data "Working" value: people count (each.objective="working") color: #magenta ;
-			//	data "Resting" value: people count (each.objective="resting") color: #blue ;
-				data "Traffic %" value: float(div(mul(500.0, sum(people count(each.the_target != nil))),float(total_road_length))) color: #black ;
-
-			}
-
 		}
 	}
 }
